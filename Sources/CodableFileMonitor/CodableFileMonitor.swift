@@ -55,7 +55,7 @@ import Observation
 /// ## Example
 /// ```swift
 /// struct CustomEncoder: CFMDataEncoder {
-///     func encode<T: Encodable>(_ value: T) throws -> Data {
+///     func encodeToData<T: Encodable>(_ value: T) throws -> Data {
 ///         // Your custom encoding logic here
 ///         return customEncodedData
 ///     }
@@ -67,7 +67,7 @@ public protocol CFMDataEncoder {
   /// - Parameter value: The value to encode.
   /// - Returns: A new `Data` value containing the encoded data.
   /// - Throws: An error if any value throws an error during encoding.
-  func encode<T: Encodable>(_ value: T) throws -> Data
+  func encodeToData<T: Encodable>(_ value: T) throws -> Data
 }
 
 /// Protocol for decoders that can decode Codable types from Data.
@@ -79,7 +79,7 @@ public protocol CFMDataEncoder {
 /// ## Example
 /// ```swift
 /// struct CustomDecoder: CFMDataDecoder {
-///     func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+///     func decodeFromData<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
 ///         // Your custom decoding logic here
 ///         return decodedValue
 ///     }
@@ -93,15 +93,34 @@ public protocol CFMDataDecoder {
   ///   - data: The data to decode from.
   /// - Returns: A value of the requested type.
   /// - Throws: An error if any value throws an error during decoding.
-  func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T
+  func decodeFromData<T: Decodable>(_ type: T.Type, from data: Data) throws -> T
 }
 
 // MARK: - Foundation Extensions
 
-extension JSONEncoder: CFMDataEncoder {}
-extension JSONDecoder: CFMDataDecoder {}
-extension PropertyListEncoder: CFMDataEncoder {}
-extension PropertyListDecoder: CFMDataDecoder {}
+extension JSONEncoder: CFMDataEncoder {
+  public func encodeToData<T>(_ value: T) throws -> Data where T: Encodable {
+    try self.encode(value)
+  }
+}
+
+extension JSONDecoder: CFMDataDecoder {
+  public func decodeFromData<T>(_ type: T.Type, from data: Data) throws -> T where T: Decodable {
+    try self.decode(type, from: data)
+  }
+}
+
+extension PropertyListEncoder: CFMDataEncoder {
+  public func encodeToData<T>(_ value: T) throws -> Data where T: Encodable {
+    try self.encode(value)
+  }
+}
+
+extension PropertyListDecoder: CFMDataDecoder {
+  public func decodeFromData<T>(_ type: T.Type, from data: Data) throws -> T where T: Decodable {
+    try self.decode(type, from: data)
+  }
+}
 
 /// A generic file monitor that automatically manages Codable data with file persistence.
 ///
@@ -592,7 +611,7 @@ public final class CodableFileMonitor<
 
       // Load and decode data
       let fileData = try Data(contentsOf: fileURL)
-      let decodedData = try _decoder.decode(T.self, from: fileData)
+      let decodedData = try _decoder.decodeFromData(T.self, from: fileData)
 
       // Update properties with actor
       await dataStorage.updateData(decodedData, modificationDate: modificationDate)
@@ -612,7 +631,7 @@ public final class CodableFileMonitor<
       let currentData = dataStorage.currentData
 
       // Encode data
-      let encodedData = try _encoder.encode(currentData)
+      let encodedData = try _encoder.encodeToData(currentData)
 
       // Write to file atomically
       try encodedData.write(to: fileURL, options: Data.WritingOptions.atomic)

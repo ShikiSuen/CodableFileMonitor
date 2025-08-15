@@ -262,11 +262,11 @@ import CodableFileMonitor
 
 // Protocol definitions (built into the library)
 public protocol CFMDataEncoder {
-    func encode<T: Encodable>(_ value: T) throws -> Data
+    func encodeToData<T: Encodable>(_ value: T) throws -> Data
 }
 
 public protocol CFMDataDecoder {
-    func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T
+    func decodeFromData<T: Decodable>(_ type: T.Type, from data: Data) throws -> T
 }
 
 // Using PropertyList codecs
@@ -314,13 +314,13 @@ You can create your own codecs by conforming to the protocols:
 
 ```swift
 struct CustomEncoder: CFMDataEncoder {
-    func encode<T: Encodable>(_ value: T) throws -> Data {
+    func encodeToData<T: Encodable>(_ value: T) throws -> Data {
         // Your custom encoding logic
     }
 }
 
 struct CustomDecoder: CFMDataDecoder {
-    func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+    func decodeFromData<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
         // Your custom decoding logic
     }
 }

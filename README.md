@@ -19,36 +19,32 @@ CodableFileMonitor is a modern, type-safe file monitoring solution that:
 ### 🔧 Generic Type Support
 ```swift
 // Works with any Codable type and custom codecs
-let configMonitor = CodableFileMonitor<AppConfig, JSONEncoder, JSONDecoder>(
-    fileURL: configFileURL,
-    defaultValue: AppConfig.default,
-    encoder: JSONEncoder(),
-    decoder: JSONDecoder()
+let configMonitor = JSONCodableFileMonitor(
+    fileURL: configURL,
+    defaultValue: AppConfig.default
 )
 
 // Convenience initializer for JSON (most common usage)
 let jsonConfigMonitor = CodableFileMonitor(
-    fileURL: configFileURL,
+    fileURL: configURL,
     defaultValue: AppConfig.default
 )
 
 // Using PropertyList codecs
-let plistMonitor = CodableFileMonitor(
-    fileURL: plistFileURL,
-    defaultValue: UserData.default,
-    encoder: PropertyListEncoder(),
-    decoder: PropertyListDecoder()
+let plistMonitor = PropertyListCodableFileMonitor<AppConfig>(
+    fileURL: documentsDirectory.appendingPathComponent("config.plist"),
+    defaultValue: .default
 )
 
 // Using type aliases for common patterns
 let jsonMonitor: JSONCodableFileMonitor<AppConfig> = CodableFileMonitor(
-    fileURL: jsonFileURL,
+    fileURL: configURL,
     defaultValue: AppConfig.default
 )
 
-let plistMonitor2: PlistCodableFileMonitor<UserData> = CodableFileMonitor(
-    fileURL: plistFileURL,
-    defaultValue: UserData.default,
+let plistMonitor2: PlistCodableFileMonitor<AppConfig> = CodableFileMonitor(
+    fileURL: plistURL,
+    defaultValue: AppConfig.default,
     encoder: PropertyListEncoder(),
     decoder: PropertyListDecoder()
 )
@@ -59,21 +55,42 @@ let plistMonitor2: PlistCodableFileMonitor<UserData> = CodableFileMonitor(
 import SwiftUI
 
 struct ConfigView: View {
-    let monitor: CodableFileMonitor<AppConfig>
+    @State private var appState: AppState
+
+    init(configURL: URL) {
+        self._appState = State(initialValue: AppState(configURL: configURL))
+    }
     
     var body: some View {
         VStack {
             // Automatically updates when monitor.data changes
-            Text("App: \(monitor.data.appName)")
-            Text("Version: \(monitor.data.version)")
+            Text("App: \(appState.configMonitor.data.appName)")
+                .font(.headline)
+
+            Text("Version: \(appState.configMonitor.data.version)")
+
+            Text("Connections: \(appState.configMonitor.data.maxConnections)")
+
+            Text("Features: \(appState.configMonitor.data.features.joined(separator: ", "))")
+
             Toggle("Debug Mode", isOn: Binding(
-                get: { monitor.data.debugEnabled },
+                get: { appState.configMonitor.data.debugEnabled },
                 set: { newValue in
-                    var config = monitor.data
+                    var config = appState.configMonitor.data
                     config.debugEnabled = newValue
-                    monitor.data = config // Auto-saves to file
+                    appState.configMonitor.data = config
                 }
             ))
+
+            Button("Save Configuration") {
+                Task {
+                    await appState.configMonitor.saveData()
+                }
+            }
+
+            Text("Last modified: \(appState.configMonitor.lastModificationDate?.formatted() ?? "Never")")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
     }
 }
@@ -123,17 +140,18 @@ struct AppConfig: Codable, Equatable {
 }
 
 // Initialize the monitor (uses JSON codecs by default)
-let configURL = documentsDirectory.appendingPathComponent("config.json")
-let monitor = CodableFileMonitor(
+let configURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    .appendingPathComponent("app_config.json")
+let jsonMonitor = JSONCodableFileMonitor(
     fileURL: configURL,
     defaultValue: AppConfig.default
 )
 
 // Start monitoring
-try await monitor.startMonitoring()
+try await jsonMonitor.startMonitoring()
 
 // Access and modify data (automatically saves)
-print("Current app name: \(monitor.data.appName)")
+print("Current app name: \(jsonMonitor.data.appName)")
 
 let updatedConfig = AppConfig(
     appName: "UpdatedApp",
@@ -142,7 +160,7 @@ let updatedConfig = AppConfig(
     maxConnections: 200,
     features: ["feature1", "feature2", "newFeature"]
 )
-monitor.data = updatedConfig
+jsonMonitor.data = updatedConfig
 
 // The file is automatically saved and changes are observable
 ```
@@ -229,25 +247,15 @@ The `@Observable` macro makes CodableFileMonitor perfect for SwiftUI:
 ```swift
 @Observable
 class AppState {
-    let configMonitor: CodableFileMonitor<AppConfig>
-    
+    var configMonitor: JSONCodableFileMonitor<AppConfig>
+
     init(configURL: URL) {
-        self.configMonitor = CodableFileMonitor(
-            fileURL: configURL,
-            defaultValue: AppConfig.default
-        )
-        Task {
-            try await configMonitor.startMonitoring()
-        }
+        self.configMonitor = JSONCodableFileMonitor(fileURL: configURL, defaultValue: .default)
     }
-    
-    var appName: String {
-        get { configMonitor.data.appName }
-        set {
-            var config = configMonitor.data
-            config.appName = newValue
-            configMonitor.data = config
-        }
+
+    var debugEnabled: Bool {
+        get { configMonitor.data.debugEnabled }
+        set { configMonitor.data.debugEnabled = newValue }
     }
 }
 ```
@@ -275,29 +283,27 @@ plistEncoder.outputFormat = .xml
 let plistDecoder = PropertyListDecoder()
 
 let monitor = CodableFileMonitor(
-    fileURL: configURL.appendingPathExtension("plist"),
+    fileURL: plistURL,
     defaultValue: AppConfig.default,
-    encoder: plistEncoder,
-    decoder: plistDecoder
+    encoder: PropertyListEncoder(),
+    decoder: PropertyListDecoder()
 )
 
 // For JSON (default behavior), use the convenience initializer:
-let jsonMonitor = CodableFileMonitor(
-    fileURL: configURL.appendingPathExtension("json"),
-    defaultValue: AppConfig.default
+let jsonMonitor = JSONCodableFileMonitor<AppConfig>(
+    fileURL: documentsDirectory.appendingPathComponent("config.json"),
+    defaultValue: .default
 )
 
 // Type aliases available for common usage patterns:
 let jsonMonitor2: JSONCodableFileMonitor<AppConfig> = CodableFileMonitor(
-    fileURL: configURL.appendingPathExtension("json"),
+    fileURL: configURL,
     defaultValue: AppConfig.default
 )
 
-let plistMonitor3: PlistCodableFileMonitor<AppConfig> = CodableFileMonitor(
-    fileURL: configURL.appendingPathExtension("plist"),
-    defaultValue: AppConfig.default,
-    encoder: PropertyListEncoder(),
-    decoder: PropertyListDecoder()
+let plistMonitor3 = PropertyListCodableFileMonitor<AppConfig>(
+    fileURL: documentsDirectory.appendingPathComponent("config3.plist"),
+    defaultValue: .default
 )
 ```
 
@@ -343,13 +349,23 @@ monitor.data = config
 
 // ✅ For SwiftUI bindings, use this pattern:
 Toggle("Debug Mode", isOn: Binding(
-    get: { monitor.data.debugEnabled },
-    set: { newValue in
-        var config = monitor.data
-        config.debugEnabled = newValue
-        monitor.data = config  // Triggers observation + auto-save
-    }
-))
+                get: { appState.configMonitor.data.debugEnabled },
+                set: { newValue in
+                    var config = appState.configMonitor.data
+                    config.debugEnabled = newValue
+                    appState.configMonitor.data = config
+                }
+            ))
+
+            Button("Save Configuration") {
+                Task {
+                    await appState.configMonitor.saveData()
+                }
+            }
+
+            Text("Last modified: \(appState.configMonitor.lastModificationDate?.formatted() ?? "Never")")
+                .font(.caption)
+                .foregroundColor(.secondary)
 ```
 
 ### SwiftUI Integration
@@ -358,16 +374,23 @@ All properties under `monitor.data` automatically trigger SwiftUI view updates w
 
 ```swift
 struct ConfigView: View {
-    @State var monitor: CodableFileMonitor<AppConfig, JSONEncoder, JSONDecoder>
+    @State private var appState: AppState
+
+    init(configURL: URL) {
+        self._appState = State(initialValue: AppState(configURL: configURL))
+    }
     
     var body: some View {
         // These all update automatically when monitor.data changes
         VStack {
-            Text("App: \(monitor.data.appName)")
-            Text("Version: \(monitor.data.version)")
-            Text("Debug: \(monitor.data.debugEnabled ? "ON" : "OFF")")
-            Text("Connections: \(monitor.data.maxConnections)")
-            Text("Features: \(monitor.data.features.joined(separator: ", "))")
+            Text("App: \(appState.configMonitor.data.appName)")
+                .font(.headline)
+
+            Text("Version: \(appState.configMonitor.data.version)")
+
+            Text("Connections: \(appState.configMonitor.data.maxConnections)")
+
+            Text("Features: \(appState.configMonitor.data.features.joined(separator: ", "))")
         }
     }
 }
@@ -388,13 +411,13 @@ public typealias PlistCodableFileMonitor<T: Codable> =
 
 // Usage examples:
 let jsonConfig: JSONCodableFileMonitor<AppConfig> = CodableFileMonitor(
-    fileURL: jsonURL,
-    defaultValue: AppConfig.default
+    fileURL: configURL,
+    defaultValue: .default
 )
 
-let plistConfig: PlistCodableFileMonitor<Settings> = CodableFileMonitor(
-    fileURL: plistURL, 
-    defaultValue: Settings.default,
+let plistConfig: PlistCodableFileMonitor<AppConfig> = CodableFileMonitor(
+    fileURL: documentsDirectory.appendingPathComponent("config.plist"),
+    defaultValue: .default,
     encoder: PropertyListEncoder(),
     decoder: PropertyListDecoder()
 )
@@ -402,35 +425,11 @@ let plistConfig: PlistCodableFileMonitor<Settings> = CodableFileMonitor(
 
 ## Demo
 
-The included `CodableFileMonitorDemo.swift` file contains comprehensive usage examples and integration patterns:
+The included `CodableFileMonitorDemo.swift` file contains comprehensive usage examples and integration patterns, demonstrating how to use `CodableFileMonitor` for:
 
-```swift
-// View the demo file for detailed examples:
-// - Basic JSON configuration management
-// - Custom PropertyList codecs usage  
-// - SwiftUI integration patterns
-// - Advanced error handling
-// - Multiple configuration files management
-// - Type aliases usage examples
-```
+- JSON and PropertyList configuration management
+- SwiftUI integration with `@Observable`
+- Error handling and robust file operations
+- Managing multiple configuration files simultaneously
 
-**Note**: Since Swift scripts don't support local Swift Package imports, the demo file serves as documentation and reference implementation rather than an executable script.
-
-To run the examples in your own project:
-
-1. Add CodableFileMonitor as a dependency to your Package.swift
-2. Copy the relevant code examples from `CodableFileMonitorDemo.swift`
-3. Adapt them to your specific use case
-
-The demo showcases:
-- Generic type usage with custom configuration structures
-- Automatic file persistence on data changes  
-- External file change detection and auto-reload
-- Manual save/reload operations
-- Concurrency safety with async/await
-- Error handling and proper cleanup
-- Custom codec support (JSON vs PropertyList)
-- Type alias usage examples
-- Thread-safe concurrent access patterns
-- Swift Observation framework integration
-- SwiftUI integration with automatic UI updates
+**Note**: Since Swift scripts don't support local Swift Package imports, the demo file serves as documentation and reference implementation rather than an executable script. To run the examples in your own project, add CodableFileMonitor as a dependency to your `Package.swift` and copy the relevant code examples from `CodableFileMonitorDemo.swift`, adapting them to your specific use case.

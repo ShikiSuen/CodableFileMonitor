@@ -31,7 +31,7 @@ let jsonConfigMonitor = CodableFileMonitor(
 )
 
 // Using PropertyList codecs
-let plistMonitor = PropertyListCodableFileMonitor<AppConfig>(
+let plistMonitor = PlistCodableFileMonitor<AppConfig>(
     fileURL: documentsDirectory.appendingPathComponent("config.plist"),
     defaultValue: .default
 )
@@ -301,7 +301,7 @@ let jsonMonitor2: JSONCodableFileMonitor<AppConfig> = CodableFileMonitor(
     defaultValue: AppConfig.default
 )
 
-let plistMonitor3 = PropertyListCodableFileMonitor<AppConfig>(
+let plistMonitor3 = PlistCodableFileMonitor<AppConfig>(
     fileURL: documentsDirectory.appendingPathComponent("config3.plist"),
     defaultValue: .default
 )
@@ -349,52 +349,20 @@ monitor.data = config
 
 // ✅ For SwiftUI bindings, use this pattern:
 Toggle("Debug Mode", isOn: Binding(
-                get: { appState.configMonitor.data.debugEnabled },
-                set: { newValue in
-                    var config = appState.configMonitor.data
-                    config.debugEnabled = newValue
-                    appState.configMonitor.data = config
-                }
-            ))
+    get: { appState.configMonitor.data.debugEnabled },
+    set: { newValue in
+        var config = appState.configMonitor.data
+        config.debugEnabled = newValue
+        appState.configMonitor.data = config
+    }
+))
 
-            Button("Save Configuration") {
-                Task {
-                    await appState.configMonitor.saveData()
-                }
-            }
-
-            Text("Last modified: \(appState.configMonitor.lastModificationDate?.formatted() ?? "Never")")
-                .font(.caption)
-                .foregroundColor(.secondary)
+// See the comprehensive SwiftUI example in the "Swift Observation Framework" section for complete implementation.
 ```
 
 ### SwiftUI Integration
 
-All properties under `monitor.data` automatically trigger SwiftUI view updates when the parent `data` property changes:
-
-```swift
-struct ConfigView: View {
-    @State private var appState: AppState
-
-    init(configURL: URL) {
-        self._appState = State(initialValue: AppState(configURL: configURL))
-    }
-    
-    var body: some View {
-        // These all update automatically when monitor.data changes
-        VStack {
-            Text("App: \(appState.configMonitor.data.appName)")
-                .font(.headline)
-
-            Text("Version: \(appState.configMonitor.data.version)")
-
-            Text("Connections: \(appState.configMonitor.data.maxConnections)")
-
-            Text("Features: \(appState.configMonitor.data.features.joined(separator: ", "))")
-        }
-    }
-}
-```
+All properties under `monitor.data` automatically trigger SwiftUI view updates when the parent `data` property changes. See the comprehensive SwiftUI example in the "Swift Observation Framework" section above for implementation details.
 
 ## Type Aliases
 

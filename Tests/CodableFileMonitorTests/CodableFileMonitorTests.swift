@@ -31,243 +31,246 @@ struct ComplexTestData: Codable, Equatable {
 
 // MARK: - Test Suite
 
-@Test("CodableFileMonitor: Basic initialization and data management")
-func testBasicInitialization() async throws {
-  let tempURL = createTempFileURL()
-  defer { try? FileManager.default.removeItem(at: tempURL) }
+@Suite
+struct CodableFileMonitorTests {
+  @Test("CodableFileMonitor: Basic initialization and data management")
+  func testBasicInitialization() async throws {
+    let tempURL = createTempFileURL()
+    defer { try? FileManager.default.removeItem(at: tempURL) }
 
-  let monitor = JSONCodableFileMonitor(
-    fileURL: tempURL,
-    defaultValue: TestConfig.defaultValue
-  )
+    let monitor = JSONCodableFileMonitor(
+      fileURL: tempURL,
+      defaultValue: TestConfig.defaultValue
+    )
 
-  // Check initial state
-  #expect(monitor.data == TestConfig.defaultValue)
-  #expect(monitor.fileURL == tempURL)
-  #expect(!monitor.isMonitoring)
-  #expect(monitor.lastModificationDate == nil)
-}
-
-@Test("CodableFileMonitor: File creation and data persistence")
-func testDataPersistence() async throws {
-  let tempURL = createTempFileURL()
-  defer { try? FileManager.default.removeItem(at: tempURL) }
-
-  let monitor = JSONCodableFileMonitor(
-    fileURL: tempURL,
-    defaultValue: TestConfig.defaultValue
-  )
-
-  // Modify data - should trigger automatic save
-  let newConfig = TestConfig(name: "test", version: 2, enabled: true)
-  await MainActor.run {
-    monitor.data = newConfig
+    // Check initial state
+    #expect(monitor.data == TestConfig.defaultValue)
+    #expect(monitor.fileURL == tempURL)
+    #expect(!monitor.isMonitoring)
+    #expect(monitor.lastModificationDate == nil)
   }
 
-  // Wait a bit for the async save to complete
-  try await Task.sleep(nanoseconds: 100_000_000)  // 0.1s
+  @Test("CodableFileMonitor: File creation and data persistence")
+  func testDataPersistence() async throws {
+    let tempURL = createTempFileURL()
+    defer { try? FileManager.default.removeItem(at: tempURL) }
 
-  // Verify file was created and contains correct data
-  #expect(FileManager.default.fileExists(atPath: tempURL.path))
+    let monitor = JSONCodableFileMonitor(
+      fileURL: tempURL,
+      defaultValue: TestConfig.defaultValue
+    )
 
-  let savedData = try Data(contentsOf: tempURL)
-  let decodedConfig = try JSONDecoder().decode(TestConfig.self, from: savedData)
-  #expect(decodedConfig == newConfig)
-}
+    // Modify data - should trigger automatic save
+    let newConfig = TestConfig(name: "test", version: 2, enabled: true)
+    await MainActor.run {
+      monitor.data = newConfig
+    }
 
-@Test("CodableFileMonitor: Monitoring and external file changes")
-func testFileMonitoring() async throws {
-  let tempURL = createTempFileURL()
-  defer { try? FileManager.default.removeItem(at: tempURL) }
+    // Wait a bit for the async save to complete
+    try await Task.sleep(nanoseconds: 100_000_000)  // 0.1s
 
-  // Create initial file with data
-  let initialConfig = TestConfig(name: "initial", version: 1, enabled: false)
-  let initialData = try JSONEncoder().encode(initialConfig)
-  try initialData.write(to: tempURL)
+    // Verify file was created and contains correct data
+    #expect(FileManager.default.fileExists(atPath: tempURL.path))
 
-  let monitor = JSONCodableFileMonitor(
-    fileURL: tempURL,
-    defaultValue: TestConfig.defaultValue
-  )
-
-  // Start monitoring
-  try await monitor.startMonitoring()
-  #expect(monitor.isMonitoring)
-  #expect(monitor.data == initialConfig)
-
-  // Externally modify the file
-  let modifiedConfig = TestConfig(name: "modified", version: 3, enabled: true)
-  let modifiedData = try JSONEncoder().encode(modifiedConfig)
-  try modifiedData.write(to: tempURL)
-
-  // Wait for the monitor to detect changes
-  try await Task.sleep(nanoseconds: 700_000_000)  // 0.7s (longer than polling interval)
-
-  // Verify data was updated
-  #expect(monitor.data == modifiedConfig)
-
-  // Clean up
-  await monitor.stopMonitoring()
-  #expect(!monitor.isMonitoring)
-}
-
-@Test("CodableFileMonitor: Complex data types")
-func testComplexDataTypes() async throws {
-  let tempURL = createTempFileURL()
-  defer { try? FileManager.default.removeItem(at: tempURL) }
-
-  let monitor = JSONCodableFileMonitor(
-    fileURL: tempURL,
-    defaultValue: ComplexTestData.defaultValue
-  )
-
-  // Create complex data
-  let complexData = ComplexTestData(
-    id: UUID(),
-    timestamps: [Date(), Date().addingTimeInterval(-3600)],
-    metadata: ["author": "test", "version": "1.0"]
-  )
-
-  await MainActor.run {
-    monitor.data = complexData
+    let savedData = try Data(contentsOf: tempURL)
+    let decodedConfig = try JSONDecoder().decode(TestConfig.self, from: savedData)
+    #expect(decodedConfig == newConfig)
   }
 
-  // Wait for save
-  try await Task.sleep(nanoseconds: 100_000_000)
+  @Test("CodableFileMonitor: Monitoring and external file changes")
+  func testFileMonitoring() async throws {
+    let tempURL = createTempFileURL()
+    defer { try? FileManager.default.removeItem(at: tempURL) }
 
-  // Verify persistence
-  let savedData = try Data(contentsOf: tempURL)
-  let decodedData = try JSONDecoder().decode(ComplexTestData.self, from: savedData)
+    // Create initial file with data
+    let initialConfig = TestConfig(name: "initial", version: 1, enabled: false)
+    let initialData = try JSONEncoder().encode(initialConfig)
+    try initialData.write(to: tempURL)
 
-  #expect(decodedData.id == complexData.id)
-  #expect(decodedData.metadata == complexData.metadata)
-  #expect(decodedData.timestamps.count == complexData.timestamps.count)
-}
+    let monitor = JSONCodableFileMonitor(
+      fileURL: tempURL,
+      defaultValue: TestConfig.defaultValue
+    )
 
-@Test("CodableFileMonitor: Error handling for corrupt files")
-func testErrorHandling() async throws {
-  let tempURL = createTempFileURL()
-  defer { try? FileManager.default.removeItem(at: tempURL) }
-
-  // Write invalid JSON to file
-  let invalidData = "invalid json data".data(using: .utf8)!
-  try invalidData.write(to: tempURL)
-
-  let monitor = JSONCodableFileMonitor(
-    fileURL: tempURL,
-    defaultValue: TestConfig.defaultValue
-  )
-
-  // Starting monitoring with invalid file should throw
-  do {
+    // Start monitoring
     try await monitor.startMonitoring()
-    #expect(Bool(false), "Should have thrown an error for invalid file")
-  } catch {
-    #expect(error is JSONCodableFileMonitor<TestConfig>.CodableFileMonitorError)
+    #expect(monitor.isMonitoring)
+    #expect(monitor.data == initialConfig)
+
+    // Externally modify the file
+    let modifiedConfig = TestConfig(name: "modified", version: 3, enabled: true)
+    let modifiedData = try JSONEncoder().encode(modifiedConfig)
+    try modifiedData.write(to: tempURL)
+
+    // Wait for the monitor to detect changes
+    try await Task.sleep(nanoseconds: 700_000_000)  // 0.7s (longer than polling interval)
+
+    // Verify data was updated
+    #expect(monitor.data == modifiedConfig)
+
+    // Clean up
+    await monitor.stopMonitoring()
+    #expect(!monitor.isMonitoring)
   }
-}
 
-@Test("CodableFileMonitor: Manual reload functionality")
-func testManualReload() async throws {
-  let tempURL = createTempFileURL()
-  defer { try? FileManager.default.removeItem(at: tempURL) }
+  @Test("CodableFileMonitor: Complex data types")
+  func testComplexDataTypes() async throws {
+    let tempURL = createTempFileURL()
+    defer { try? FileManager.default.removeItem(at: tempURL) }
 
-  // Create initial file
-  let initialConfig = TestConfig(name: "initial", version: 1, enabled: false)
-  let initialData = try JSONEncoder().encode(initialConfig)
-  try initialData.write(to: tempURL)
+    let monitor = JSONCodableFileMonitor(
+      fileURL: tempURL,
+      defaultValue: ComplexTestData.defaultValue
+    )
 
-  let monitor = JSONCodableFileMonitor(
-    fileURL: tempURL,
-    defaultValue: TestConfig.defaultValue
-  )
+    // Create complex data
+    let complexData = ComplexTestData(
+      id: UUID(),
+      timestamps: [Date(), Date().addingTimeInterval(-3600)],
+      metadata: ["author": "test", "version": "1.0"]
+    )
 
-  // Load initial data
-  try await monitor.reloadData()
-  #expect(monitor.data == initialConfig)
+    await MainActor.run {
+      monitor.data = complexData
+    }
 
-  // Externally modify file
-  let modifiedConfig = TestConfig(name: "modified", version: 2, enabled: true)
-  let modifiedData = try JSONEncoder().encode(modifiedConfig)
-  try modifiedData.write(to: tempURL)
+    // Wait for save
+    try await Task.sleep(nanoseconds: 100_000_000)
 
-  // Manual reload should pick up changes
-  try await monitor.reloadData()
-  #expect(monitor.data == modifiedConfig)
-}
+    // Verify persistence
+    let savedData = try Data(contentsOf: tempURL)
+    let decodedData = try JSONDecoder().decode(ComplexTestData.self, from: savedData)
 
-@Test("CodableFileMonitor: Concurrent access safety")
-func testConcurrentAccess() async throws {
-  let tempURL = createTempFileURL()
-  defer { try? FileManager.default.removeItem(at: tempURL) }
+    #expect(decodedData.id == complexData.id)
+    #expect(decodedData.metadata == complexData.metadata)
+    #expect(decodedData.timestamps.count == complexData.timestamps.count)
+  }
 
-  let monitor = JSONCodableFileMonitor(
-    fileURL: tempURL,
-    defaultValue: TestConfig.defaultValue
-  )
+  @Test("CodableFileMonitor: Error handling for corrupt files")
+  func testErrorHandling() async throws {
+    let tempURL = createTempFileURL()
+    defer { try? FileManager.default.removeItem(at: tempURL) }
 
-  try await monitor.startMonitoring()
+    // Write invalid JSON to file
+    let invalidData = "invalid json data".data(using: .utf8)!
+    try invalidData.write(to: tempURL)
 
-  // Perform concurrent data modifications
-  await withTaskGroup(of: Void.self) { group in
-    for i in 0..<10 {
-      group.addTask {
-        await MainActor.run {
-          let config = TestConfig(name: "config\(i)", version: i, enabled: i % 2 == 0)
-          monitor.data = config
-        }
-      }
+    let monitor = JSONCodableFileMonitor(
+      fileURL: tempURL,
+      defaultValue: TestConfig.defaultValue
+    )
+
+    // Starting monitoring with invalid file should throw
+    do {
+      try await monitor.startMonitoring()
+      #expect(Bool(false), "Should have thrown an error for invalid file")
+    } catch {
+      #expect(error is JSONCodableFileMonitor<TestConfig>.CodableFileMonitorError)
     }
   }
 
-  // Wait for operations to complete
-  try await Task.sleep(nanoseconds: 200_000_000)
+  @Test("CodableFileMonitor: Manual reload functionality")
+  func testManualReload() async throws {
+    let tempURL = createTempFileURL()
+    defer { try? FileManager.default.removeItem(at: tempURL) }
 
-  // Verify file exists and contains valid data
-  #expect(FileManager.default.fileExists(atPath: tempURL.path))
+    // Create initial file
+    let initialConfig = TestConfig(name: "initial", version: 1, enabled: false)
+    let initialData = try JSONEncoder().encode(initialConfig)
+    try initialData.write(to: tempURL)
 
-  let savedData = try Data(contentsOf: tempURL)
-  let _ = try JSONDecoder().decode(TestConfig.self, from: savedData)  // Should not throw
+    let monitor = JSONCodableFileMonitor(
+      fileURL: tempURL,
+      defaultValue: TestConfig.defaultValue
+    )
 
-  await monitor.stopMonitoring()
-}
+    // Load initial data
+    try await monitor.reloadData()
+    #expect(monitor.data == initialConfig)
 
-@Test("CodableFileMonitor: Custom Property List Codecs")
-func testPropertyListCodecs() async throws {
-  let tempURL = createTempPlistFileURL()
-  defer { try? FileManager.default.removeItem(at: tempURL) }
+    // Externally modify file
+    let modifiedConfig = TestConfig(name: "modified", version: 2, enabled: true)
+    let modifiedData = try JSONEncoder().encode(modifiedConfig)
+    try modifiedData.write(to: tempURL)
 
-  // Create monitor with PropertyList codecs
-  let encoder = PropertyListEncoder()
-  encoder.outputFormat = .xml
-  let decoder = PropertyListDecoder()
+    // Manual reload should pick up changes
+    try await monitor.reloadData()
+    #expect(monitor.data == modifiedConfig)
+  }
 
-  let monitor = CodableFileMonitor(
-    fileURL: tempURL,
-    defaultValue: TestConfig.defaultValue,
-    encoder: encoder,
-    decoder: decoder
-  )
+  @Test("CodableFileMonitor: Concurrent access safety")
+  func testConcurrentAccess() async throws {
+    let tempURL = createTempFileURL()
+    defer { try? FileManager.default.removeItem(at: tempURL) }
 
-  // Test data persistence with plist format
-  let testConfig = TestConfig(name: "plist-test", version: 42, enabled: true)
-  monitor.data = testConfig
+    let monitor = JSONCodableFileMonitor(
+      fileURL: tempURL,
+      defaultValue: TestConfig.defaultValue
+    )
 
-  // Wait for automatic save
-  try await Task.sleep(nanoseconds: 100_000_000)
+    try await monitor.startMonitoring()
 
-  // Verify file was created and contains XML plist data
-  #expect(FileManager.default.fileExists(atPath: tempURL.path))
+    // Perform concurrent data modifications
+    await withTaskGroup(of: Void.self) { group in
+      for i in 0..<10 {
+        group.addTask {
+          await MainActor.run {
+            let config = TestConfig(name: "config\(i)", version: i, enabled: i % 2 == 0)
+            monitor.data = config
+          }
+        }
+      }
+    }
 
-  let fileContent = try String(contentsOf: tempURL, encoding: .utf8)
-  #expect(fileContent.contains("<?xml version="))
-  #expect(fileContent.contains("plist-test"))
+    // Wait for operations to complete
+    try await Task.sleep(nanoseconds: 200_000_000)
 
-  // Test reloading
-  try await monitor.startMonitoring()
-  #expect(monitor.data == testConfig)
+    // Verify file exists and contains valid data
+    #expect(FileManager.default.fileExists(atPath: tempURL.path))
 
-  await monitor.stopMonitoring()
+    let savedData = try Data(contentsOf: tempURL)
+    let _ = try JSONDecoder().decode(TestConfig.self, from: savedData)  // Should not throw
+
+    await monitor.stopMonitoring()
+  }
+
+  @Test("CodableFileMonitor: Custom Property List Codecs")
+  func testPropertyListCodecs() async throws {
+    let tempURL = createTempPlistFileURL()
+    defer { try? FileManager.default.removeItem(at: tempURL) }
+
+    // Create monitor with PropertyList codecs
+    let encoder = PropertyListEncoder()
+    encoder.outputFormat = .xml
+    let decoder = PropertyListDecoder()
+
+    let monitor = CodableFileMonitor(
+      fileURL: tempURL,
+      defaultValue: TestConfig.defaultValue,
+      encoder: encoder,
+      decoder: decoder
+    )
+
+    // Test data persistence with plist format
+    let testConfig = TestConfig(name: "plist-test", version: 42, enabled: true)
+    monitor.data = testConfig
+
+    // Wait for automatic save
+    try await Task.sleep(nanoseconds: 100_000_000)
+
+    // Verify file was created and contains XML plist data
+    #expect(FileManager.default.fileExists(atPath: tempURL.path))
+
+    let fileContent = try String(contentsOf: tempURL, encoding: .utf8)
+    #expect(fileContent.contains("<?xml version="))
+    #expect(fileContent.contains("plist-test"))
+
+    // Test reloading
+    try await monitor.startMonitoring()
+    #expect(monitor.data == testConfig)
+
+    await monitor.stopMonitoring()
+  }
 }
 
 // MARK: - Helper Functions

@@ -42,7 +42,10 @@
 /// ```
 
 import Foundation
-import Observation
+
+#if canImport(Observation)
+  import Observation
+#endif
 
 // MARK: - Protocol Definitions
 
@@ -175,6 +178,7 @@ extension PropertyListDecoder: CFMDataDecoder {
 ///     }
 /// }
 /// ```
+@available(macOS 14.0, iOS 17.0, macCatalyst 17.0, watchOS 10.0, tvOS 17.0, *)
 @Observable
 public final class CodableFileMonitor<
   T: Codable,
@@ -688,10 +692,12 @@ public final class CodableFileMonitor<
 ///     decoder: JSONDecoder()
 /// )
 /// ```
+@available(macOS 14.0, iOS 17.0, macCatalyst 17.0, watchOS 10.0, tvOS 17.0, *)
 public typealias JSONCodableFileMonitor<T: Codable> = CodableFileMonitor<
   T, JSONEncoder, JSONDecoder
 >
 
+@available(macOS 14.0, iOS 17.0, macCatalyst 17.0, watchOS 10.0, tvOS 17.0, *)
 extension JSONCodableFileMonitor where Encoder == JSONEncoder, Decoder == JSONDecoder {
   /// Creates a new file monitor using JSON codecs (convenience initializer).
   ///
@@ -750,10 +756,12 @@ extension JSONCodableFileMonitor where Encoder == JSONEncoder, Decoder == JSONDe
 ///
 /// - Note: PropertyList format supports fewer data types than JSON, so ensure
 ///   your Codable types are compatible with PropertyList serialization.
+@available(macOS 14.0, iOS 17.0, macCatalyst 17.0, watchOS 10.0, tvOS 17.0, *)
 public typealias PlistCodableFileMonitor<T: Codable> = CodableFileMonitor<
   T, PropertyListEncoder, PropertyListDecoder
 >
 
+@available(macOS 14.0, iOS 17.0, macCatalyst 17.0, watchOS 10.0, tvOS 17.0, *)
 extension PlistCodableFileMonitor
 where Encoder == PropertyListEncoder, Decoder == PropertyListDecoder {
   /// Creates a new file monitor using PropertyList codecs (convenience initializer).

@@ -165,7 +165,7 @@ struct CodableFileMonitorTests {
       try await monitor.startMonitoring()
       #expect(Bool(false), "Should have thrown an error for invalid file")
     } catch {
-      #expect(error is JSONCodableFileMonitor<TestConfig>.CodableFileMonitorError)
+      #expect(error is CodableFileMonitorError)
     }
   }
 

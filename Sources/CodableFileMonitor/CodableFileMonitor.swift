@@ -499,67 +499,6 @@ public final class CodableFileMonitor<
     }
   }
 
-  // MARK: - Error Handling
-
-  /// Errors that can occur during file monitoring operations.
-  ///
-  /// These errors provide specific information about what went wrong during
-  /// file operations, encoding, or decoding.
-  public enum CodableFileMonitorError: LocalizedError {
-    /// The monitored file was not found.
-    ///
-    /// This error typically occurs during manual operations when attempting
-    /// to read a file that doesn't exist. During normal monitoring, missing
-    /// files are handled gracefully by using the default value.
-    case fileNotFound
-
-    /// The file contains data that cannot be processed.
-    ///
-    /// This error occurs when the file exists but contains data that doesn't
-    /// match the expected format or structure.
-    case invalidData
-
-    /// Failed to encode data for writing to the file.
-    ///
-    /// This error wraps the underlying encoding error and indicates that the
-    /// current data couldn't be serialized using the configured encoder.
-    ///
-    /// - Parameter Error: The underlying encoding error.
-    case encodingFailed(Error)
-
-    /// Failed to decode data when reading from the file.
-    ///
-    /// This error wraps the underlying decoding error and indicates that the
-    /// file contents couldn't be deserialized using the configured decoder.
-    ///
-    /// - Parameter Error: The underlying decoding error.
-    case decodingFailed(Error)
-
-    /// A file system error occurred.
-    ///
-    /// This error wraps underlying file system errors such as permission
-    /// issues, disk full, or other I/O problems.
-    ///
-    /// - Parameter Error: The underlying file system error.
-    case fileSystemError(Error)
-
-    /// A localized message describing what error occurred.
-    public var errorDescription: String? {
-      switch self {
-      case .fileNotFound:
-        return "The monitored file was not found"
-      case .invalidData:
-        return "The file contains invalid data"
-      case .encodingFailed(let error):
-        return "Failed to encode data: \(error.localizedDescription)"
-      case .decodingFailed(let error):
-        return "Failed to decode data: \(error.localizedDescription)"
-      case .fileSystemError(let error):
-        return "File system error: \(error.localizedDescription)"
-      }
-    }
-  }
-
   // MARK: Private
 
   /// Task for monitoring file changes
@@ -663,6 +602,67 @@ public final class CodableFileMonitor<
         print("Error monitoring file \(fileURL.path): \(error)")
         try? await Task.sleep(nanoseconds: 500_000_000)
       }
+    }
+  }
+}
+
+// MARK: - Error Handling
+
+/// Errors that can occur during file monitoring operations.
+///
+/// These errors provide specific information about what went wrong during
+/// file operations, encoding, or decoding.
+public enum CodableFileMonitorError: LocalizedError {
+  /// The monitored file was not found.
+  ///
+  /// This error typically occurs during manual operations when attempting
+  /// to read a file that doesn't exist. During normal monitoring, missing
+  /// files are handled gracefully by using the default value.
+  case fileNotFound
+
+  /// The file contains data that cannot be processed.
+  ///
+  /// This error occurs when the file exists but contains data that doesn't
+  /// match the expected format or structure.
+  case invalidData
+
+  /// Failed to encode data for writing to the file.
+  ///
+  /// This error wraps the underlying encoding error and indicates that the
+  /// current data couldn't be serialized using the configured encoder.
+  ///
+  /// - Parameter Error: The underlying encoding error.
+  case encodingFailed(Error)
+
+  /// Failed to decode data when reading from the file.
+  ///
+  /// This error wraps the underlying decoding error and indicates that the
+  /// file contents couldn't be deserialized using the configured decoder.
+  ///
+  /// - Parameter Error: The underlying decoding error.
+  case decodingFailed(Error)
+
+  /// A file system error occurred.
+  ///
+  /// This error wraps underlying file system errors such as permission
+  /// issues, disk full, or other I/O problems.
+  ///
+  /// - Parameter Error: The underlying file system error.
+  case fileSystemError(Error)
+
+  /// A localized message describing what error occurred.
+  public var errorDescription: String? {
+    switch self {
+    case .fileNotFound:
+      return "The monitored file was not found"
+    case .invalidData:
+      return "The file contains invalid data"
+    case .encodingFailed(let error):
+      return "Failed to encode data: \(error.localizedDescription)"
+    case .decodingFailed(let error):
+      return "Failed to decode data: \(error.localizedDescription)"
+    case .fileSystemError(let error):
+      return "File system error: \(error.localizedDescription)"
     }
   }
 }

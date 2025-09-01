@@ -373,19 +373,6 @@ struct ConfigView: View {
 }
 ```
 
-## Migration from FolderMonitor
-
-The new CodableFileMonitor replaces any previous FolderMonitor with enhanced capabilities:
-
-| Previous Approach | CodableFileMonitor |
-|------------------|-------------------|
-| Directory monitoring | File-specific monitoring |
-| No type safety | Generic `<T: Codable, Encoder, Decoder>` support |
-| Manual state management | Automatic data persistence |
-| Basic change detection | Smart timestamp-based updates |
-| Limited concurrency | Full Swift 6 concurrency support |
-| JSON-only | Custom codec support (JSON, PropertyList, etc.) |
-
 ## Type Aliases
 
 For convenience, the library provides type aliases for common usage patterns:

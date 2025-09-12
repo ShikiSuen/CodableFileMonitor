@@ -70,7 +70,7 @@ struct CodableFileMonitorTests {
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1s
 
     // Verify file was created and contains correct data
-    #expect(FileManager.default.fileExists(atPath: tempURL.path))
+    #expect(FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
 
     let savedData = try Data(contentsOf: tempURL)
     let decodedConfig = try JSONDecoder().decode(TestConfig.self, from: savedData)
@@ -100,7 +100,7 @@ struct CodableFileMonitorTests {
     // Externally modify the file
     let modifiedConfig = TestConfig(name: "modified", version: 3, enabled: true)
     let modifiedData = try JSONEncoder().encode(modifiedConfig)
-    
+
     // Add small delay to ensure different modification time
     try await Task.sleep(nanoseconds: 10_000_000)  // 0.01s
     try modifiedData.write(to: tempURL)
@@ -194,7 +194,7 @@ struct CodableFileMonitorTests {
     // Externally modify file
     let modifiedConfig = TestConfig(name: "modified", version: 2, enabled: true)
     let modifiedData = try JSONEncoder().encode(modifiedConfig)
-    
+
     // Add small delay to ensure different modification time
     try await Task.sleep(nanoseconds: 10_000_000)  // 0.01s
     try modifiedData.write(to: tempURL)
@@ -232,7 +232,7 @@ struct CodableFileMonitorTests {
     try await Task.sleep(nanoseconds: 200_000_000)
 
     // Verify file exists and contains valid data
-    #expect(FileManager.default.fileExists(atPath: tempURL.path))
+    #expect(FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
 
     let savedData = try Data(contentsOf: tempURL)
     let _ = try JSONDecoder().decode(TestConfig.self, from: savedData)  // Should not throw
@@ -246,7 +246,7 @@ struct CodableFileMonitorTests {
     defer { try? FileManager.default.removeItem(at: tempURL) }
 
     // Ensure file doesn't exist
-    #expect(!FileManager.default.fileExists(atPath: tempURL.path))
+    #expect(!FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
 
     // Create monitor with default value
     let defaultConfig = TestConfig(name: "default-test", version: 99, enabled: true)
@@ -256,12 +256,12 @@ struct CodableFileMonitorTests {
     )
 
     // Verify initialization doesn't create file
-    #expect(!FileManager.default.fileExists(atPath: tempURL.path))
+    #expect(!FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
     #expect(monitor.data == defaultConfig)
 
     // Even after startMonitoring, file should not be created if it doesn't exist
     try await monitor.startMonitoring()
-    #expect(!FileManager.default.fileExists(atPath: tempURL.path))
+    #expect(!FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
     #expect(monitor.data == defaultConfig)
 
     await monitor.stopMonitoring()
@@ -278,7 +278,8 @@ struct CodableFileMonitorTests {
     try existingData.write(to: tempURL)
 
     // Get original file modification date
-    let originalAttributes = try FileManager.default.attributesOfItem(atPath: tempURL.path)
+    let originalAttributes = try FileManager.default.attributesOfItem(
+      atPath: tempURL.path(percentEncoded: false))
     let originalModDate = originalAttributes[.modificationDate] as! Date
 
     // Create monitor with different default value
@@ -289,7 +290,8 @@ struct CodableFileMonitorTests {
     )
 
     // Check that init doesn't change the file
-    let postInitAttributes = try FileManager.default.attributesOfItem(atPath: tempURL.path)
+    let postInitAttributes = try FileManager.default.attributesOfItem(
+      atPath: tempURL.path(percentEncoded: false))
     let postInitModDate = postInitAttributes[.modificationDate] as! Date
     #expect(postInitModDate == originalModDate)
 
@@ -302,7 +304,8 @@ struct CodableFileMonitorTests {
     try await monitor.startMonitoring()
 
     // File should still have original modification date
-    let postStartAttributes = try FileManager.default.attributesOfItem(atPath: tempURL.path)
+    let postStartAttributes = try FileManager.default.attributesOfItem(
+      atPath: tempURL.path(percentEncoded: false))
     let postStartModDate = postStartAttributes[.modificationDate] as! Date
     #expect(postStartModDate == originalModDate)
 
@@ -338,7 +341,7 @@ struct CodableFileMonitorTests {
     try await Task.sleep(nanoseconds: 100_000_000)
 
     // Verify file was created and contains XML plist data
-    #expect(FileManager.default.fileExists(atPath: tempURL.path))
+    #expect(FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
 
     let fileContent = try String(contentsOf: tempURL, encoding: .utf8)
     #expect(fileContent.contains("<?xml version="))

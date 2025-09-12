@@ -70,7 +70,7 @@ struct CodableFileMonitorTests {
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1s
 
     // Verify file was created and contains correct data
-    #expect(FileManager.default.fileExists(atPath: tempURL.compatiblePath))
+    #expect(FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
 
     let savedData = try Data(contentsOf: tempURL)
     let decodedConfig = try JSONDecoder().decode(TestConfig.self, from: savedData)
@@ -232,7 +232,7 @@ struct CodableFileMonitorTests {
     try await Task.sleep(nanoseconds: 200_000_000)
 
     // Verify file exists and contains valid data
-    #expect(FileManager.default.fileExists(atPath: tempURL.compatiblePath))
+    #expect(FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
 
     let savedData = try Data(contentsOf: tempURL)
     let _ = try JSONDecoder().decode(TestConfig.self, from: savedData)  // Should not throw
@@ -246,7 +246,7 @@ struct CodableFileMonitorTests {
     defer { try? FileManager.default.removeItem(at: tempURL) }
 
     // Ensure file doesn't exist
-    #expect(!FileManager.default.fileExists(atPath: tempURL.compatiblePath))
+    #expect(!FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
 
     // Create monitor with default value
     let defaultConfig = TestConfig(name: "default-test", version: 99, enabled: true)
@@ -256,12 +256,12 @@ struct CodableFileMonitorTests {
     )
 
     // Verify initialization doesn't create file
-    #expect(!FileManager.default.fileExists(atPath: tempURL.compatiblePath))
+    #expect(!FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
     #expect(monitor.data == defaultConfig)
 
     // Even after startMonitoring, file should not be created if it doesn't exist
     try await monitor.startMonitoring()
-    #expect(!FileManager.default.fileExists(atPath: tempURL.compatiblePath))
+    #expect(!FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
     #expect(monitor.data == defaultConfig)
 
     await monitor.stopMonitoring()
@@ -279,7 +279,7 @@ struct CodableFileMonitorTests {
 
     // Get original file modification date
     let originalAttributes = try FileManager.default.attributesOfItem(
-      atPath: tempURL.compatiblePath)
+      atPath: tempURL.path(percentEncoded: false))
     let originalModDate = originalAttributes[.modificationDate] as! Date
 
     // Create monitor with different default value
@@ -291,7 +291,7 @@ struct CodableFileMonitorTests {
 
     // Check that init doesn't change the file
     let postInitAttributes = try FileManager.default.attributesOfItem(
-      atPath: tempURL.compatiblePath)
+      atPath: tempURL.path(percentEncoded: false))
     let postInitModDate = postInitAttributes[.modificationDate] as! Date
     #expect(postInitModDate == originalModDate)
 
@@ -305,7 +305,7 @@ struct CodableFileMonitorTests {
 
     // File should still have original modification date
     let postStartAttributes = try FileManager.default.attributesOfItem(
-      atPath: tempURL.compatiblePath)
+      atPath: tempURL.path(percentEncoded: false))
     let postStartModDate = postStartAttributes[.modificationDate] as! Date
     #expect(postStartModDate == originalModDate)
 
@@ -341,7 +341,7 @@ struct CodableFileMonitorTests {
     try await Task.sleep(nanoseconds: 100_000_000)
 
     // Verify file was created and contains XML plist data
-    #expect(FileManager.default.fileExists(atPath: tempURL.compatiblePath))
+    #expect(FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
 
     let fileContent = try String(contentsOf: tempURL, encoding: .utf8)
     #expect(fileContent.contains("<?xml version="))
@@ -367,21 +367,4 @@ private func createTempPlistFileURL() -> URL {
   let tempDir = FileManager.default.temporaryDirectory
   let fileName = "CodableFileMonitor_Test_\(UUID().uuidString).plist"
   return tempDir.appendingPathComponent(fileName)
-}
-
-// MARK: - Private Extensions
-
-/// Backwards compatible URL path handling for tests
-private extension URL {
-  /// Returns the file system path with percent encoding removed.
-  /// 
-  /// This provides backwards compatibility for older platform versions that don't support
-  /// the `path(percentEncoded:)` method introduced in iOS 16.0+, macOS 13.0+, etc.
-  var compatiblePath: String {
-    if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
-      return path(percentEncoded: false)
-    } else {
-      return path
-    }
-  }
 }

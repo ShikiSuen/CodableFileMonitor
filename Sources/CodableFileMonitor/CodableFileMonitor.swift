@@ -451,7 +451,7 @@ public final class CodableFileMonitor<
       try await saveDataToFile()
     } catch {
       // Handle save errors - could add logging or error reporting here
-      print("Failed to save data to \(fileURL.compatiblePath): \(error)")
+      print("Failed to save data to \(fileURL.path(percentEncoded: false)): \(error)")
     }
   }
 
@@ -518,7 +518,7 @@ public final class CodableFileMonitor<
     let fileManager = FileManager.default
 
     var isDirectory: ObjCBool = false
-    let parentPath = parentURL.compatiblePath
+    let parentPath = parentURL.path(percentEncoded: false)
     if !fileManager.fileExists(atPath: parentPath, isDirectory: &isDirectory) {
       try fileManager.createDirectory(
         at: parentURL,
@@ -531,7 +531,7 @@ public final class CodableFileMonitor<
   /// Loads data from file
   private func loadData() async throws {
     let fileManager = FileManager.default
-    let filePath = fileURL.compatiblePath
+    let filePath = fileURL.path(percentEncoded: false)
 
     // Check if file exists
     guard fileManager.fileExists(atPath: filePath) else {
@@ -582,7 +582,7 @@ public final class CodableFileMonitor<
       try encodedData.write(to: fileURL, options: Data.WritingOptions.atomic)
 
       // Update modification date in actor
-      let filePath = fileURL.compatiblePath
+      let filePath = fileURL.path(percentEncoded: false)
       let attributes = try FileManager.default.attributesOfItem(atPath: filePath)
       let modificationDate = attributes[.modificationDate] as? Date
       await dataStorage.updateData(currentData, modificationDate: modificationDate)
@@ -602,7 +602,7 @@ public final class CodableFileMonitor<
         try await Task.sleep(nanoseconds: 500_000_000)
       } catch {
         // Handle errors silently or log them
-        print("Error monitoring file \(fileURL.compatiblePath): \(error)")
+        print("Error monitoring file \(fileURL.path(percentEncoded: false)): \(error)")
         try? await Task.sleep(nanoseconds: 500_000_000)
       }
     }
@@ -795,22 +795,5 @@ where Encoder == PropertyListEncoder, Decoder == PropertyListDecoder {
       encoder: PropertyListEncoder(),
       decoder: PropertyListDecoder()
     )
-  }
-}
-
-// MARK: - Private Extensions
-
-/// Backwards compatible URL path handling
-private extension URL {
-  /// Returns the file system path with percent encoding removed.
-  /// 
-  /// This provides backwards compatibility for older platform versions that don't support
-  /// the `path(percentEncoded:)` method introduced in iOS 16.0+, macOS 13.0+, etc.
-  var compatiblePath: String {
-    if #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) {
-      return path(percentEncoded: false)
-    } else {
-      return path
-    }
   }
 }

@@ -292,7 +292,7 @@ public final class CodableFileMonitor<
     }
     set {
       dataStorage.updateDataSync(newValue)
-      Task {
+      Task { @MainActor in
         await saveData()
       }
     }
@@ -375,7 +375,7 @@ public final class CodableFileMonitor<
     try await loadData()
 
     // Start file monitoring task
-    monitoringTask = Task {
+    monitoringTask = Task { @MainActor in
       await monitorFileChanges()
     }
   }

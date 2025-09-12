@@ -70,7 +70,7 @@ struct CodableFileMonitorTests {
     try await Task.sleep(nanoseconds: 100_000_000)  // 0.1s
 
     // Verify file was created and contains correct data
-    #expect(FileManager.default.fileExists(atPath: tempURL.path))
+    #expect(FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
 
     let savedData = try Data(contentsOf: tempURL)
     let decodedConfig = try JSONDecoder().decode(TestConfig.self, from: savedData)
@@ -100,10 +100,13 @@ struct CodableFileMonitorTests {
     // Externally modify the file
     let modifiedConfig = TestConfig(name: "modified", version: 3, enabled: true)
     let modifiedData = try JSONEncoder().encode(modifiedConfig)
+
+    // Add small delay to ensure different modification time
+    try await Task.sleep(nanoseconds: 10_000_000)  // 0.01s
     try modifiedData.write(to: tempURL)
 
     // Wait for the monitor to detect changes
-    try await Task.sleep(nanoseconds: 700_000_000)  // 0.7s (longer than polling interval)
+    try await Task.sleep(nanoseconds: 800_000_000)  // 0.8s (longer than polling interval)
 
     // Verify data was updated
     #expect(monitor.data == modifiedConfig)
@@ -191,6 +194,9 @@ struct CodableFileMonitorTests {
     // Externally modify file
     let modifiedConfig = TestConfig(name: "modified", version: 2, enabled: true)
     let modifiedData = try JSONEncoder().encode(modifiedConfig)
+
+    // Add small delay to ensure different modification time
+    try await Task.sleep(nanoseconds: 10_000_000)  // 0.01s
     try modifiedData.write(to: tempURL)
 
     // Manual reload should pick up changes
@@ -226,10 +232,86 @@ struct CodableFileMonitorTests {
     try await Task.sleep(nanoseconds: 200_000_000)
 
     // Verify file exists and contains valid data
-    #expect(FileManager.default.fileExists(atPath: tempURL.path))
+    #expect(FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
 
     let savedData = try Data(contentsOf: tempURL)
     let _ = try JSONDecoder().decode(TestConfig.self, from: savedData)  // Should not throw
+
+    await monitor.stopMonitoring()
+  }
+
+  @Test("CodableFileMonitor: No file overwrite during initialization - file not exists")
+  func testNoFileOverwriteInitNonExistentFile() async throws {
+    let tempURL = createTempFileURL()
+    defer { try? FileManager.default.removeItem(at: tempURL) }
+
+    // Ensure file doesn't exist
+    #expect(!FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
+
+    // Create monitor with default value
+    let defaultConfig = TestConfig(name: "default-test", version: 99, enabled: true)
+    let monitor = JSONCodableFileMonitor(
+      fileURL: tempURL,
+      defaultValue: defaultConfig
+    )
+
+    // Verify initialization doesn't create file
+    #expect(!FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
+    #expect(monitor.data == defaultConfig)
+
+    // Even after startMonitoring, file should not be created if it doesn't exist
+    try await monitor.startMonitoring()
+    #expect(!FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
+    #expect(monitor.data == defaultConfig)
+
+    await monitor.stopMonitoring()
+  }
+
+  @Test("CodableFileMonitor: No file overwrite during initialization - existing file")
+  func testNoFileOverwriteInitExistingFile() async throws {
+    let tempURL = createTempFileURL()
+    defer { try? FileManager.default.removeItem(at: tempURL) }
+
+    // Create existing file with different content than default
+    let existingConfig = TestConfig(name: "existing-content", version: 42, enabled: false)
+    let existingData = try JSONEncoder().encode(existingConfig)
+    try existingData.write(to: tempURL)
+
+    // Get original file modification date
+    let originalAttributes = try FileManager.default.attributesOfItem(
+      atPath: tempURL.path(percentEncoded: false))
+    let originalModDate = originalAttributes[.modificationDate] as! Date
+
+    // Create monitor with different default value
+    let defaultConfig = TestConfig(name: "default-different", version: 1, enabled: true)
+    let monitor = JSONCodableFileMonitor(
+      fileURL: tempURL,
+      defaultValue: defaultConfig
+    )
+
+    // Check that init doesn't change the file
+    let postInitAttributes = try FileManager.default.attributesOfItem(
+      atPath: tempURL.path(percentEncoded: false))
+    let postInitModDate = postInitAttributes[.modificationDate] as! Date
+    #expect(postInitModDate == originalModDate)
+
+    // Verify file content hasn't changed
+    let fileData = try Data(contentsOf: tempURL)
+    let fileConfig = try JSONDecoder().decode(TestConfig.self, from: fileData)
+    #expect(fileConfig == existingConfig)
+
+    // Start monitoring and verify file is loaded, not overwritten
+    try await monitor.startMonitoring()
+
+    // File should still have original modification date
+    let postStartAttributes = try FileManager.default.attributesOfItem(
+      atPath: tempURL.path(percentEncoded: false))
+    let postStartModDate = postStartAttributes[.modificationDate] as! Date
+    #expect(postStartModDate == originalModDate)
+
+    // Monitor should have loaded existing data, not used default
+    #expect(monitor.data == existingConfig)
+    #expect(monitor.data != defaultConfig)
 
     await monitor.stopMonitoring()
   }
@@ -259,7 +341,7 @@ struct CodableFileMonitorTests {
     try await Task.sleep(nanoseconds: 100_000_000)
 
     // Verify file was created and contains XML plist data
-    #expect(FileManager.default.fileExists(atPath: tempURL.path))
+    #expect(FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)))
 
     let fileContent = try String(contentsOf: tempURL, encoding: .utf8)
     #expect(fileContent.contains("<?xml version="))

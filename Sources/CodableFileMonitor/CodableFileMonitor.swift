@@ -194,6 +194,19 @@ public final class CodableFileMonitor<
   /// This initializer allows you to specify custom encoders and decoders for
   /// different file formats (JSON, PropertyList, etc.).
   ///
+  /// ## Important Behavior - Force-load Mechanism
+  /// 
+  /// **Critical**: If the specified file exists and contains valid data at the time
+  /// of initialization, the monitor will immediately load that data and make it available
+  /// through the `data` property. This ensures that existing configuration is accessible
+  /// immediately after initialization, without requiring a call to `startMonitoring()`.
+  /// 
+  /// This behavior is essential for scenarios where:
+  /// - The `data` property is accessed immediately after initialization
+  /// - SwiftUI views or other reactive components depend on the data being available instantly
+  /// - macOS 26+ timing requirements where file loading needs to happen synchronously during init
+  /// - Configuration needs to be available before async monitoring begins
+  ///
   /// - Parameters:
   ///   - fileURL: The URL of the file to monitor. Parent directories will be created if needed.
   ///   - defaultValue: The default value to use when the file doesn't exist or fails to load.
@@ -208,7 +221,13 @@ public final class CodableFileMonitor<
   ///     encoder: PropertyListEncoder(),
   ///     decoder: PropertyListDecoder()
   /// )
+  /// 
+  /// // Data is immediately available if file exists - no need to call startMonitoring() first
+  /// print(monitor.data.settingValue) // Works immediately
   /// ```
+  ///
+  /// - Note: If the file contains invalid data that cannot be decoded, the force-load
+  ///         mechanism will silently fail and the `defaultValue` will be used instead.
   public init(
     fileURL: URL,
     defaultValue: T,
@@ -220,7 +239,12 @@ public final class CodableFileMonitor<
     self.dataStorage = DataStorage(defaultValue: defaultValue)
     self._encoder = encoder
     self._decoder = decoder
-    // WARNING: The following manually-load step is necessary on at least macOS 26.
+    // CRITICAL: The following force-load step is necessary on at least macOS 26.
+    // Without this, accessing monitor.data immediately after initialization would return
+    // the defaultValue instead of the actual file contents, causing incorrect behavior
+    // in SwiftUI views and other immediate-access scenarios. This ensures that existing
+    // file data is loaded synchronously during initialization, not asynchronously during
+    // startMonitoring(). See testForceLoadMechanism test for validation.
     if let currentData = try? Data(contentsOf: fileURL),
       let decoded = try? decoder.decodeFromData(T.self, from: currentData)
     {

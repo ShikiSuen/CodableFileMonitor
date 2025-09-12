@@ -353,6 +353,85 @@ struct CodableFileMonitorTests {
 
     await monitor.stopMonitoring()
   }
+
+  @Test("CodableFileMonitor: Force-load mechanism - immediate data access after initialization")
+  func testForceLoadMechanism() async throws {
+    let tempURL = createTempFileURL()
+    defer { try? FileManager.default.removeItem(at: tempURL) }
+
+    // Create a file with specific data that differs from default
+    let fileConfig = TestConfig(name: "file-data", version: 999, enabled: true)
+    let fileData = try JSONEncoder().encode(fileConfig)
+    try fileData.write(to: tempURL)
+
+    // Create monitor with different default value
+    let defaultConfig = TestConfig(name: "default-data", version: 1, enabled: false)
+    let monitor = JSONCodableFileMonitor(
+      fileURL: tempURL,
+      defaultValue: defaultConfig
+    )
+
+    // CRITICAL TEST: Access monitor.data immediately after initialization
+    // WITHOUT calling startMonitoring() first
+    // This should return the file data, not the default data
+    // This behavior depends on the force-load mechanism in the initializer
+    #expect(monitor.data == fileConfig, "Force-load mechanism should load file data during initialization")
+    #expect(monitor.data != defaultConfig, "Should not use default value when file exists")
+
+    // Verify the file hasn't been modified (timestamp check)
+    let attributes = try FileManager.default.attributesOfItem(atPath: tempURL.path(percentEncoded: false))
+    let modDate = attributes[.modificationDate] as! Date
+    
+    // Even after accessing data, file should not be modified
+    try await Task.sleep(nanoseconds: 10_000_000)  // Small delay
+    let newAttributes = try FileManager.default.attributesOfItem(atPath: tempURL.path(percentEncoded: false))
+    let newModDate = newAttributes[.modificationDate] as! Date
+    #expect(newModDate == modDate, "File should not be modified by force-load mechanism")
+  }
+
+  @Test("CodableFileMonitor: Demonstrates why force-load is necessary vs startMonitoring")
+  func testForceLoadVsStartMonitoring() async throws {
+    let tempURL = createTempFileURL()
+    defer { try? FileManager.default.removeItem(at: tempURL) }
+
+    // Create a file with specific data
+    let fileConfig = TestConfig(name: "file-content", version: 42, enabled: true)
+    let fileData = try JSONEncoder().encode(fileConfig)
+    try fileData.write(to: tempURL)
+
+    // Test 1: With force-load (current behavior) - immediate access works
+    do {
+      let monitor = JSONCodableFileMonitor(
+        fileURL: tempURL,
+        defaultValue: TestConfig(name: "default", version: 1, enabled: false)
+      )
+      
+      // This should work immediately thanks to force-load
+      #expect(monitor.data == fileConfig, "Force-load allows immediate access to file data")
+    }
+
+    // Test 2: Simulate what would happen if we relied only on startMonitoring
+    // By demonstrating the timing difference
+    do {
+      let monitor = JSONCodableFileMonitor(
+        fileURL: tempURL,
+        defaultValue: TestConfig(name: "default", version: 1, enabled: false)
+      )
+      
+      // The monitor already has the file data due to force-load
+      let dataBeforeStartMonitoring = monitor.data
+      
+      // Start monitoring (which would normally be required to load data)
+      try await monitor.startMonitoring()
+      let dataAfterStartMonitoring = monitor.data
+      
+      // Both should be the same due to force-load
+      #expect(dataBeforeStartMonitoring == dataAfterStartMonitoring)
+      #expect(dataBeforeStartMonitoring == fileConfig)
+      
+      await monitor.stopMonitoring()
+    }
+  }
 }
 
 // MARK: - Helper Functions

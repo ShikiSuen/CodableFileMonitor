@@ -220,6 +220,12 @@ public final class CodableFileMonitor<
     self.dataStorage = DataStorage(defaultValue: defaultValue)
     self._encoder = encoder
     self._decoder = decoder
+    // WARNING: The following manually-load step is necessary on at least macOS 26.
+    if let currentData = try? Data(contentsOf: fileURL),
+      let decoded = try? decoder.decodeFromData(T.self, from: currentData)
+    {
+      dataStorage.updateDataSync(decoded)
+    }
   }
 
   // MARK: - Deinitialization
